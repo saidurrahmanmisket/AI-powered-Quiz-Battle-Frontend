@@ -38,6 +38,12 @@ export const authApi = {
 export const gameApi = {
   getRooms: () => api.get('/game/rooms'),
   createRoom: (name) => api.post(`/game/rooms?name=${encodeURIComponent(name)}`),
+  getRoom: (roomId) => api.get(`/game/rooms/${roomId}`),
+  getRoomStatus: (roomId) => api.get(`/game/rooms/${roomId}/status`),
+};
+
+export const leaderboardApi = {
+  getTop: () => api.get('/leaderboard'),
 };
 
 export default api;

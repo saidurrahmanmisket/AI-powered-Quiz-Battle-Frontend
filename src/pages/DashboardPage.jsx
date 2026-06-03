@@ -13,11 +13,11 @@ const stats = [
   { icon: Medal, label: 'Rank', value: '—', sub: 'Register to rank', color: 'var(--emerald-400)', bg: 'rgba(16,185,129,0.1)' },
 ];
 
-const roadmap = [
-  { icon: Users, title: 'Matchmaking & Lobby', phase: 2, desc: 'Real-time multiplayer room creation with synchronized countdown' },
-  { icon: Swords, title: 'Battle Loop', phase: 3, desc: '10-second question rounds, instant elimination, live rankings' },
-  { icon: Bot, title: 'AI Opponents', phase: 4, desc: 'Smart bots with human-like delays and weighted accuracy' },
-  { icon: Trophy, title: 'Leaderboards', phase: 5, desc: 'Global rankings, match history, and achievement tracking' },
+const features = [
+  { icon: Users, title: 'Matchmaking & Lobby', desc: 'Real-time rooms with synchronized 30-second countdown', color: 'var(--violet-400)', bg: 'rgba(124,58,237,0.12)' },
+  { icon: Swords, title: 'Battle Loop', desc: '10-second rounds, instant elimination, live score updates', color: 'var(--amber-400)', bg: 'rgba(245,158,11,0.12)' },
+  { icon: Bot, title: 'AI Opponents', desc: 'Smart bots with weighted accuracy (70%) and human-like delays', color: '#06b6d4', bg: 'rgba(6,182,212,0.12)' },
+  { icon: Trophy, title: 'Global Leaderboard', desc: 'Track wins, total score, and rank among all players', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
 ];
 
 export default function DashboardPage() {
@@ -54,17 +54,22 @@ export default function DashboardPage() {
         </div>
 
         {/* Action buttons */}
-        <div style={{ display: 'grid', gridTemplateColumns: isGuest ? '1fr 1fr' : '1fr', gap: '0.75rem', marginBottom: '2rem' }}
+        <div style={{ display: 'grid', gridTemplateColumns: isGuest ? '1fr 1fr 1fr' : '1fr 1fr', gap: '0.75rem', marginBottom: '2rem' }}
           className="anim-fade-up" data-stagger>
           <button className="btn btn-primary btn-lg btn-full" onClick={() => navigate('/lobby')}
             style={{ justifyContent: 'space-between' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Swords size={20} /> Find Match</span>
             <ArrowRight size={18} />
           </button>
+          <button className="btn btn-secondary btn-lg btn-full" onClick={() => navigate('/leaderboard')}
+            style={{ justifyContent: 'space-between' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Trophy size={18} /> Leaderboard</span>
+            <ArrowRight size={18} />
+          </button>
           {isGuest && (
-            <button className="btn btn-secondary btn-lg btn-full" onClick={() => navigate('/register')}
+            <button className="btn btn-ghost btn-lg btn-full" onClick={() => navigate('/register')}
               style={{ justifyContent: 'space-between' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><UserPlus size={18} /> Create Account</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><UserPlus size={18} /> Register</span>
               <ExternalLink size={16} />
             </button>
           )}
@@ -96,28 +101,25 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Roadmap */}
+        {/* Live Features */}
         <div className="anim-fade-up" style={{ animationDelay: '0.25s' }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem' }}>
-            <Clock size={14} /> Coming Soon
+            <Zap size={14} /> Live Features
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '0.75rem' }} data-stagger>
-            {roadmap.map((r) => (
-              <div key={r.phase} className="glass shimmer-hover"
-                style={{ padding: '1.25rem', opacity: 0.7, transition: 'opacity 0.3s ease' }}
-                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <r.icon size={18} style={{ color: 'var(--violet-300)' }} />
-                    <span className="font-display" style={{ fontWeight: 700, fontSize: '0.88rem' }}>{r.title}</span>
+            {features.map((f) => (
+              <div key={f.title} className="glass glass--interactive shimmer-hover"
+                style={{ padding: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.6rem' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 'var(--r-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: f.bg, flexShrink: 0 }}>
+                    <f.icon size={18} style={{ color: f.color }} />
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <span className="chip chip--violet" style={{ fontSize: '0.6rem', padding: '0.15rem 0.45rem' }}>PHASE {r.phase}</span>
-                    <Lock size={12} style={{ color: 'var(--text-dim)' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                    <span className="font-display" style={{ fontWeight: 700, fontSize: '0.88rem' }}>{f.title}</span>
+                    <span className="chip chip--emerald" style={{ fontSize: '0.55rem', padding: '0.1rem 0.4rem', width: 'fit-content' }}>✓ LIVE</span>
                   </div>
                 </div>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>{r.desc}</p>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{f.desc}</p>
               </div>
             ))}
           </div>

@@ -3,71 +3,94 @@ import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
 import { useAuth } from '../context/AuthContext';
 
+/**
+ * useGameSocket — manages a STOMP connection for a given room.
+ *
+ * roomData     → last raw room update (GameRoom object)
+ * gameEvent    → last typed event {type, payload} broadcast by BattleService
+ * connected    → boolean
+ * sendMessage  → publish to /app<destination>
+ */
 export const useGameSocket = (roomId) => {
   const { token } = useAuth();
-  const [stompClient, setStompClient] = useState(null);
+  const clientRef = useRef(null);
   const [connected, setConnected] = useState(false);
   const [roomData, setRoomData] = useState(null);
+  const [gameEvent, setGameEvent] = useState(null); // { type, payload }
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!token || !roomId) return;
 
-    const socket = new SockJS('/ws');
     const client = new Client({
-      webSocketFactory: () => socket,
-      connectHeaders: {
-        Authorization: `Bearer ${token}`
-      },
-      debug: (str) => {
-        // console.log(str);
-      },
+      // Must be absolute URL so the WS can reach backend from the Vite dev server
+      webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+      connectHeaders: { Authorization: `Bearer ${token}` },
+      reconnectDelay: 5000,
+      debug: () => {},
       onConnect: () => {
         setConnected(true);
-        // Subscribe to room updates
+
         client.subscribe(`/topic/room/${roomId}`, (message) => {
-          setRoomData(JSON.parse(message.body));
+          try {
+            const data = JSON.parse(message.body);
+
+            // Typed BattleService events carry a `type` field
+            if (data && data.type) {
+              setGameEvent(data);
+            } else {
+              // Raw GameRoom object from GameService
+              setRoomData(data);
+            }
+          } catch (e) {
+            console.error('WS parse error', e);
+          }
         });
 
-        // Send join message
+        // Tell server we joined
         client.publish({
           destination: `/app/room/${roomId}/join`,
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          body: '',
         });
       },
       onStompError: (frame) => {
-        console.error('Broker reported error: ' + frame.headers['message']);
-        console.error('Additional details: ' + frame.body);
+        console.error('STOMP error:', frame.headers['message']);
         setError(frame.headers['message']);
       },
-      onDisconnect: () => {
-        setConnected(false);
-      }
+      onDisconnect: () => setConnected(false),
     });
 
     client.activate();
-    setStompClient(client);
+    clientRef.current = client;
 
     return () => {
       if (client.active) {
-        client.publish({
-          destination: `/app/room/${roomId}/leave`,
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        try {
+          client.publish({
+            destination: `/app/room/${roomId}/leave`,
+            headers: { Authorization: `Bearer ${token}` },
+            body: '',
+          });
+        } catch (_) {}
         client.deactivate();
       }
     };
   }, [roomId, token]);
 
-  const sendMessage = useCallback((destination, body) => {
-    if (stompClient && connected) {
-      stompClient.publish({
-        destination: `/app${destination}`,
-        body: JSON.stringify(body),
-        headers: { Authorization: `Bearer ${token}` }
-      });
-    }
-  }, [stompClient, connected, token]);
+  const sendMessage = useCallback(
+    (destination, body) => {
+      const client = clientRef.current;
+      if (client && client.active) {
+        client.publish({
+          destination: `/app${destination}`,
+          body: JSON.stringify(body),
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    },
+    [token]
+  );
 
-  return { connected, roomData, error, sendMessage };
+  return { connected, roomData, gameEvent, error, sendMessage };
 };

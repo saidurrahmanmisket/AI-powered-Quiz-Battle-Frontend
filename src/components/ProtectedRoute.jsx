@@ -17,7 +17,7 @@ const ProtectedRoute = ({ children }) => {
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-        <span className="spinner" style={{ width: 40, height: 40, borderWidth: 3, color: 'var(--color-primary-glow)' }} />
+        <span className="spinner" style={{ width: 36, height: 36, borderWidth: 3, color: 'var(--violet-400)' }} />
       </div>
     );
   }

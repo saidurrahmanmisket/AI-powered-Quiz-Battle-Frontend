@@ -35,4 +35,9 @@ export const authApi = {
   guest: () => api.post('/auth/guest'),
 };
 
+export const gameApi = {
+  getRooms: () => api.get('/game/rooms'),
+  createRoom: (name) => api.post(`/game/rooms?name=${encodeURIComponent(name)}`),
+};
+
 export default api;

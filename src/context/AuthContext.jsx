@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { authApi } from '../api/client';
 
 const AuthContext = createContext(null);
 
@@ -30,6 +31,22 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
   }, []);
 
+  const login = useCallback(async (username, password) => {
+    const res = await authApi.login({ username, password });
+    const { token: jwt, username: uname } = res.data;
+    saveSession(jwt, { username: uname, guest: false });
+  }, [saveSession]);
+
+  const register = useCallback(async (username, email, password) => {
+    await authApi.register({ username, email, password });
+  }, []);
+
+  const loginAsGuest = useCallback(async () => {
+    const res = await authApi.guest();
+    const { token: jwt, username: uname } = res.data;
+    saveSession(jwt, { username: uname, guest: true });
+  }, [saveSession]);
+
   const logout = useCallback(() => {
     localStorage.removeItem('qb_token');
     localStorage.removeItem('qb_user');
@@ -42,11 +59,14 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{
-      user,
+      user: user?.username || null,
       token,
       loading,
       isAuthenticated,
       isGuest,
+      login,
+      register,
+      loginAsGuest,
       saveSession,
       logout,
     }}>

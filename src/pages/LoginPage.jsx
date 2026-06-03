@@ -1,176 +1,121 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { authApi } from '../api/client';
+import AnimatedBackground from '../components/AnimatedBackground';
 import toast from 'react-hot-toast';
+import {
+  Zap, User, Lock, Eye, EyeOff, LogIn, Gamepad2, Swords, ArrowRight
+} from 'lucide-react';
 
-const LoginPage = () => {
+export default function LoginPage() {
   const navigate = useNavigate();
-  const { saveSession } = useAuth();
-
+  const { login, loginAsGuest } = useAuth();
   const [form, setForm] = useState({ username: '', password: '' });
-  const [errors, setErrors] = useState({});
+  const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-    if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: '' });
-  };
-
-  const validate = () => {
-    const newErrors = {};
-    if (!form.username.trim()) newErrors.username = 'Username is required';
-    if (!form.password) newErrors.password = 'Password is required';
-    return newErrors;
-  };
+  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    const validationErrors = validate();
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-
+    if (!form.username.trim() || !form.password) return toast.error('Fill in both fields');
     setLoading(true);
-    try {
-      const res = await authApi.login(form);
-      saveSession(res.data.token, res.data);
-      toast.success(`Welcome back, ${res.data.username}! ⚡`);
-      navigate('/dashboard');
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Invalid credentials. Try again.';
-      toast.error(msg);
-      setErrors({ password: msg });
-    } finally {
-      setLoading(false);
-    }
+    try { await login(form.username.trim(), form.password); navigate('/dashboard'); }
+    catch (err) { toast.error(err?.response?.data?.message || 'Login failed'); }
+    finally { setLoading(false); }
   };
 
-  const handleGuestLogin = async () => {
+  const handleGuest = async () => {
     setGuestLoading(true);
-    try {
-      const res = await authApi.guest();
-      saveSession(res.data.token, res.data);
-      toast.success(`Playing as ${res.data.username} 🎭`);
-      navigate('/dashboard');
-    } catch (err) {
-      toast.error('Failed to start guest session. Try again.');
-    } finally {
-      setGuestLoading(false);
-    }
+    try { await loginAsGuest(); navigate('/dashboard'); }
+    catch { toast.error('Could not start guest session'); }
+    finally { setGuestLoading(false); }
   };
 
   return (
-    <div style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
-      {/* Animated background */}
-      <div className="bg-animated">
-        <div className="bg-grid" />
-      </div>
+    <div style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
+      <AnimatedBackground />
 
-      {/* Card */}
-      <div className="glass-card animate-fade-in-up" style={{ width: '100%', maxWidth: 440, padding: '2.5rem', position: 'relative', zIndex: 1 }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div className="font-display gradient-text animate-float" style={{ fontSize: '2rem', fontWeight: 900, marginBottom: '0.5rem', letterSpacing: '0.08em' }}>
-            ⚡ QUIZ BATTLE
+      <div className="card-animated-border anim-scale-in" style={{ width: '100%', maxWidth: 440, position: 'relative', zIndex: 1 }}>
+        <div className="card-glow__inner" style={{ padding: '2.75rem 2.25rem' }}>
+
+          {/* Logo */}
+          <div style={{ textAlign: 'center', marginBottom: '1.75rem' }} data-stagger>
+            <div className="anim-float" style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 64, height: 64, borderRadius: 'var(--r-xl)',
+              background: 'linear-gradient(135deg, var(--violet-600), var(--violet-400))',
+              boxShadow: '0 0 40px rgba(124,58,237,0.35)', marginBottom: '1rem',
+            }}>
+              <Zap size={30} color="white" fill="white" />
+            </div>
+
+            <h1 className="font-display" style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.35rem' }}>
+              <span className="text-gradient">Quiz Battle</span>
+            </h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+              Enter the arena. Dominate the trivia.
+            </p>
+
+            <div style={{ marginTop: '1rem' }}>
+              <span className="chip chip--rose chip--live">
+                <Swords size={11} /> LIVE BATTLES
+              </span>
+            </div>
           </div>
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>
-            Enter the arena. Dominate the trivia.
-          </p>
+
+          {/* Form */}
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }} data-stagger>
+            <div className="field">
+              <label className="field__label">Username</label>
+              <div className="field__input-wrap">
+                <User size={16} className="field__icon" />
+                <input className="field__input" type="text" placeholder="Enter your username"
+                  value={form.username} onChange={set('username')} autoComplete="username" />
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="field__label">Password</label>
+              <div className="field__input-wrap">
+                <Lock size={16} className="field__icon" />
+                <input className="field__input" type={showPwd ? 'text' : 'password'}
+                  placeholder="Enter your password" value={form.password}
+                  onChange={set('password')} autoComplete="current-password"
+                  style={{ paddingRight: '2.75rem' }} />
+                <button type="button" className="field__toggle" onClick={() => setShowPwd(!showPwd)} tabIndex={-1}>
+                  {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" className="btn btn-primary btn-lg btn-full" disabled={loading} style={{ marginTop: '0.25rem' }}>
+              {loading ? <span className="spinner" /> : <><LogIn size={18} /> Enter Battle</>}
+            </button>
+
+            <div className="divider">or continue as</div>
+
+            <button type="button" className="btn btn-accent btn-lg btn-full" onClick={handleGuest} disabled={guestLoading}>
+              {guestLoading ? <span className="spinner" /> : <><Gamepad2 size={18} /> Play as Guest</>}
+            </button>
+
+            <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '-0.5rem' }}>
+              Guest sessions are temporary. Stats won't be saved.
+            </p>
+          </form>
+
+          {/* Footer */}
+          <div style={{ textAlign: 'center', marginTop: '1.75rem', animation: 'fade-up 0.5s var(--ease-out-expo) 0.4s both' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+              New challenger?{' '}
+              <Link to="/register" style={{ color: 'var(--cyan-400)', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                Create Account <ArrowRight size={14} />
+              </Link>
+            </p>
+          </div>
         </div>
-
-        {/* Live badge */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
-          <span className="badge badge-purple" style={{ animation: 'pulse-glow 2.5s ease-in-out infinite' }}>
-            🔴 LIVE BATTLES
-          </span>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleLogin} className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          <div className="form-group animate-fade-in-up">
-            <label className="form-label">Username</label>
-            <input
-              id="login-username"
-              className={`form-input ${errors.username ? 'error' : ''}`}
-              type="text"
-              name="username"
-              placeholder="Enter your username"
-              value={form.username}
-              onChange={handleChange}
-              autoComplete="username"
-            />
-            {errors.username && <span className="form-error">⚠ {errors.username}</span>}
-          </div>
-
-          <div className="form-group animate-fade-in-up">
-            <label className="form-label">Password</label>
-            <input
-              id="login-password"
-              className={`form-input ${errors.password ? 'error' : ''}`}
-              type="password"
-              name="password"
-              placeholder="Enter your password"
-              value={form.password}
-              onChange={handleChange}
-              autoComplete="current-password"
-            />
-            {errors.password && <span className="form-error">⚠ {errors.password}</span>}
-          </div>
-
-          <button
-            id="login-submit"
-            type="submit"
-            className="btn btn-primary btn-full animate-fade-in-up"
-            style={{ marginTop: '0.5rem' }}
-            disabled={loading}
-          >
-            {loading ? (
-              <><span className="spinner" /> Authenticating...</>
-            ) : (
-              '🎮 Enter Battle'
-            )}
-          </button>
-        </form>
-
-        {/* Divider */}
-        <div className="divider" style={{ margin: '1.5rem 0' }}>or</div>
-
-        {/* Guest login */}
-        <button
-          id="guest-login"
-          className="btn btn-gold btn-full"
-          onClick={handleGuestLogin}
-          disabled={guestLoading}
-        >
-          {guestLoading ? (
-            <><span className="spinner" style={{ color: '#0a0a0f' }} /> Joining...</>
-          ) : (
-            '🎭 Play as Guest'
-          )}
-        </button>
-
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem', textAlign: 'center', marginTop: '0.75rem' }}>
-          Guest sessions are temporary and stats won't be saved.
-        </p>
-
-        {/* Register link */}
-        <p style={{ textAlign: 'center', marginTop: '1.75rem', color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
-          New challenger?{' '}
-          <Link
-            to="/register"
-            style={{ color: 'var(--color-primary-glow)', fontWeight: 600, textDecoration: 'none' }}
-            onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
-            onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
-          >
-            Create Account
-          </Link>
-        </p>
       </div>
     </div>
   );
-};
-
-export default LoginPage;
+}

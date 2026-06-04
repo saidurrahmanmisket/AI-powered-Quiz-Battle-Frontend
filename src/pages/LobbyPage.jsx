@@ -62,7 +62,7 @@ export default function LobbyPage() {
   };
 
   const handleCreateRoom = async () => {
-    const name = `${user}'s Arena`;
+    const name = `${user?.username || 'Player'}'s Arena`;
     try {
       const res = await gameApi.createRoom(name);
       setRooms((prev) => [...prev, res.data]);
@@ -312,11 +312,11 @@ function ActiveLobby({ room, roomId, connected, onLeave }) {
               {(room.players || []).map((p) => (
                 <div key={p} className="glass" style={{
                   padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem',
-                  border: p === user ? '1px solid var(--violet-500)' : '1px solid var(--border-subtle)',
+                  border: p === user?.username ? '1px solid var(--violet-500)' : '1px solid var(--border-subtle)',
                 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--emerald-400)', boxShadow: '0 0 8px var(--emerald-500)' }} />
                   <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{p}</span>
-                  {p === user && <span style={{ fontSize: '0.6rem', color: 'var(--violet-400)', fontWeight: 800, marginLeft: 'auto' }}>YOU</span>}
+                  {p === user?.username && <span style={{ fontSize: '0.6rem', color: 'var(--violet-400)', fontWeight: 800, marginLeft: 'auto' }}>YOU</span>}
                 </div>
               ))}
               {/* Empty bot slots */}

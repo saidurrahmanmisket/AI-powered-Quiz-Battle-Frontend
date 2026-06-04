@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 const rules = [
-  { id: 'len', label: '8+ characters', test: (p) => p.length >= 8 },
+  { id: 'len', label: '6+ characters', test: (p) => p.length >= 6 },
   { id: 'upper', label: 'Uppercase letter', test: (p) => /[A-Z]/.test(p) },
   { id: 'num', label: 'Number', test: (p) => /\d/.test(p) },
 ];
@@ -33,12 +33,22 @@ export default function RegisterPage() {
     e.preventDefault();
     if (!form.username.trim() || !form.email.trim() || !form.password) return toast.error('All fields required');
     if (form.password !== form.confirmPassword) return toast.error('Passwords don\'t match');
-    if (strength.score < 2) return toast.error('Password too weak');
+    if (strength.score < 1) return toast.error('Password must be at least 6 characters');
     setLoading(true);
     try {
       await register(form.username.trim(), form.email.trim(), form.password);
-      toast.success('Account created!'); navigate('/login');
-    } catch (err) { toast.error(err?.response?.data?.message || 'Registration failed'); }
+      toast.success('Account created! Please log in.');
+      navigate('/login');
+    } catch (err) {
+      const data = err?.response?.data;
+      // Backend validation errors come as { errors: { field: message } }
+      if (data?.errors) {
+        const firstError = Object.values(data.errors)[0];
+        toast.error(firstError || 'Validation failed');
+      } else {
+        toast.error(data?.message || 'Registration failed. Please try again.');
+      }
+    }
     finally { setLoading(false); }
   };
 

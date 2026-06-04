@@ -41,7 +41,7 @@ export default function Navbar() {
           fontSize: '0.78rem', color: 'var(--text-secondary)',
         }}>
           {isGuest ? <Ghost size={13} style={{ color: 'var(--amber-400)' }} /> : <Crown size={13} style={{ color: 'var(--violet-300)' }} />}
-          <span style={{ fontWeight: 500 }}>{user || 'Player'}</span>
+          <span style={{ fontWeight: 500 }}>{user?.username || 'Player'}</span>
           {isGuest && <span className="chip chip--amber" style={{ padding: '0.15rem 0.4rem', fontSize: '0.6rem', marginLeft: '0.15rem' }}>GUEST</span>}
         </div>
 

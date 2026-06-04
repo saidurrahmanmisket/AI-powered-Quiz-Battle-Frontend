@@ -22,7 +22,11 @@ export default function LoginPage() {
     if (!form.username.trim() || !form.password) return toast.error('Fill in both fields');
     setLoading(true);
     try { await login(form.username.trim(), form.password); navigate('/dashboard'); }
-    catch (err) { toast.error(err?.response?.data?.message || 'Login failed'); }
+    catch (err) {
+      const data = err?.response?.data;
+      const msg = data?.message || (data?.errors ? Object.values(data.errors)[0] : null) || 'Login failed. Check your username and password.';
+      toast.error(msg);
+    }
     finally { setLoading(false); }
   };
 

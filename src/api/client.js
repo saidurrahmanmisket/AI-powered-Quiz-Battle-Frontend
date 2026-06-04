@@ -40,10 +40,13 @@ export const gameApi = {
   createRoom: (name) => api.post(`/game/rooms?name=${encodeURIComponent(name)}`),
   getRoom: (roomId) => api.get(`/game/rooms/${roomId}`),
   getRoomStatus: (roomId) => api.get(`/game/rooms/${roomId}/status`),
+  getGameState: (roomId) => api.get(`/game/rooms/${roomId}/state`),
 };
 
 export const leaderboardApi = {
   getTop: () => api.get('/leaderboard'),
+  getLeaderboard: () => api.get('/leaderboard'),
+  getMatchHistory: () => api.get('/leaderboard/history'),
 };
 
 export default api;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { gameApi } from '../api/client';
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
 import AnimatedBackground from '../components/AnimatedBackground';
@@ -41,7 +42,7 @@ const TimerBar = ({ timeLimit, startTime }) => {
 };
 
 /* ─── Player Chip ────────────────────────────────── */
-const PlayerChip = ({ username, score, eliminated, isBot, isMe, pulsing }) => (
+const PlayerChip = ({ username, score, eliminated, isBot, isMe }) => (
   <div style={{
     display: 'flex', alignItems: 'center', gap: '0.6rem',
     padding: '0.5rem 0.8rem',
@@ -54,7 +55,6 @@ const PlayerChip = ({ username, score, eliminated, isBot, isMe, pulsing }) => (
     border: `1px solid ${eliminated ? 'rgba(244,63,94,0.3)' : isMe ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.06)'}`,
     opacity: eliminated ? 0.5 : 1,
     transition: 'all 0.3s',
-    ...(pulsing && !eliminated ? { animation: 'pulse 1.5s infinite' } : {}),
   }}>
     {isBot ? <Bot size={14} color="var(--violet-400)" /> : <User size={14} color="var(--text-secondary)" />}
     <span style={{ fontSize: '0.8rem', fontWeight: 600, color: eliminated ? 'var(--text-muted)' : isMe ? 'var(--violet-300)' : 'var(--text-primary)' }}>
@@ -81,20 +81,94 @@ export default function GamePage() {
     || 'Guest';
 
   /* ---- state ---- */
-  const [phase, setPhase] = useState('CONNECTING'); // CONNECTING | COUNTDOWN | QUESTION | ANSWER_RESULT | GAME_OVER
+  const [phase, setPhase] = useState('CONNECTING');
   const [countdown, setCountdown] = useState(3);
   const [allPlayers, setAllPlayers] = useState([]);
-  const [scores, setScores] = useState({});       // username -> score
+  // Use refs for values needed inside WS callbacks to avoid stale closures
+  const scoresRef = useRef({});
+  const eliminatedRef = useRef(new Set());
+  const [scores, setScores] = useState({});
   const [eliminated, setEliminated] = useState(new Set());
-  const [question, setQuestion] = useState(null); // QuestionDto
+  const [question, setQuestion] = useState(null);
   const [qStartTime, setQStartTime] = useState(0);
   const [selectedOption, setSelectedOption] = useState(null);
-  const [answerResult, setAnswerResult] = useState(null); // { correctAnswer, playerResults }
-  const [gameOver, setGameOver] = useState(null);  // { winner, rankings }
+  const [answerResult, setAnswerResult] = useState(null);
+  const [gameOver, setGameOver] = useState(null);
 
   /* ---- WebSocket connect ---- */
   useEffect(() => {
-    const stored = localStorage.getItem('qb_user');
+    // handleEvent defined INSIDE useEffect to avoid stale closure issues
+    const handleEvent = (event) => {
+      const { type, payload } = event;
+      if (!type) return; // raw room update, ignore
+
+      switch (type) {
+        case 'GAME_STARTING': {
+          const players = payload.players || [];
+          setAllPlayers(players);
+          // Init scores for all players
+          const initScores = {};
+          players.forEach(p => { initScores[p] = 0; });
+          scoresRef.current = initScores;
+          setScores(initScores);
+          eliminatedRef.current = new Set();
+          setEliminated(new Set());
+          setPhase('COUNTDOWN');
+          let c = payload.countdown || 3;
+          setCountdown(c);
+          const timer = setInterval(() => {
+            c--;
+            setCountdown(c);
+            if (c <= 0) clearInterval(timer);
+          }, 1000);
+          break;
+        }
+        case 'QUESTION': {
+          // Populate allPlayers from the score keys if not set yet (mid-game join)
+          setAllPlayers(prev => {
+            if (prev.length > 0) return prev;
+            // We don't have the list — leave it empty; score panel will show after ANSWER_RESULT
+            return prev;
+          });
+          setQuestion(payload);
+          setQStartTime(Date.now());
+          setSelectedOption(null);
+          setAnswerResult(null);
+          setPhase('QUESTION');
+          break;
+        }
+        case 'ANSWER_RESULT': {
+          const results = payload.playerResults || [];
+          const newScores = { ...scoresRef.current };
+          const newElim = new Set(eliminatedRef.current);
+          const playerNames = [];
+          results.forEach(r => {
+            newScores[r.username] = r.totalScore;
+            if (r.eliminated) newElim.add(r.username);
+            playerNames.push(r.username);
+          });
+          // If allPlayers was empty (mid-game join), populate it now
+          if (playerNames.length > 0) {
+            setAllPlayers(prev => prev.length > 0 ? prev : playerNames);
+          }
+          scoresRef.current = newScores;
+          eliminatedRef.current = newElim;
+          setScores({ ...newScores });
+          setEliminated(new Set(newElim));
+          setAnswerResult(payload);
+          setPhase('ANSWER_RESULT');
+          break;
+        }
+        case 'GAME_OVER': {
+          setGameOver(payload);
+          setPhase('GAME_OVER');
+          break;
+        }
+        default:
+          break;
+      }
+    };
+
     const client = new Client({
       webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
       connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
@@ -108,82 +182,67 @@ export default function GamePage() {
             console.error('WS parse error', e);
           }
         });
-        // Send join
         client.publish({ destination: `/app/room/${roomId}/join`, body: '' });
       },
       onDisconnect: () => console.log('WS disconnected'),
+      onStompError: (frame) => console.error('STOMP error:', frame),
     });
     client.activate();
     stompRef.current = client;
     return () => {
-      client.publish({ destination: `/app/room/${roomId}/leave`, body: '' });
+      try {
+        client.publish({ destination: `/app/room/${roomId}/leave`, body: '' });
+      } catch (_) {}
       client.deactivate();
     };
-  }, [roomId, token]);
+  }, [roomId, token]); // handleEvent is now defined inside, so no stale-closure issue
 
-  /* ---- Event handler ---- */
-  const handleEvent = useCallback((event) => {
-    const { type, payload } = event;
+  /* ---- Bootstrap game state on mount (handles page refresh / late join) ---- */
+  useEffect(() => {
+    const bootstrap = async () => {
+      try {
+        const res = await gameApi.getGameState(roomId);
+        const snap = res.data;
 
-    if (!type) {
-      // Raw room update (GameRoom object)
-      return;
-    }
+        // Populate player list if we don't have it yet
+        if (snap.players && snap.players.length > 0) {
+          setAllPlayers(prev => prev.length > 0 ? prev : snap.players);
+          const initScores = {};
+          snap.players.forEach(p => {
+            initScores[p] = (snap.scores && snap.scores[p]) ?? 0;
+          });
+          // Only overwrite if we haven't received any WS scores yet
+          if (Object.keys(scoresRef.current).length === 0) {
+            scoresRef.current = initScores;
+            setScores(initScores);
+          }
+        }
 
-    switch (type) {
-      case 'GAME_STARTING': {
-        setAllPlayers(payload.players || []);
-        setPhase('COUNTDOWN');
-        let c = payload.countdown || 3;
-        setCountdown(c);
-        const timer = setInterval(() => {
-          c--;
-          setCountdown(c);
-          if (c <= 0) clearInterval(timer);
-        }, 1000);
-        break;
+        // If game already active and we're still CONNECTING → move to waiting
+        if ((snap.status === 'PLAYING' || snap.status === 'STARTING') && snap.gameActive) {
+          setPhase(prev => prev === 'CONNECTING' ? 'WAITING_FOR_QUESTION' : prev);
+        }
+      } catch (e) {
+        console.warn('Could not fetch game snapshot', e);
       }
-      case 'QUESTION': {
-        setQuestion(payload);
-        setQStartTime(Date.now());
-        setSelectedOption(null);
-        setAnswerResult(null);
-        setPhase('QUESTION');
-        break;
-      }
-      case 'ANSWER_RESULT': {
-        const results = payload.playerResults || [];
-        const newScores = {};
-        const newElim = new Set(eliminated);
-        results.forEach(r => {
-          newScores[r.username] = r.totalScore;
-          if (r.eliminated) newElim.add(r.username);
-        });
-        setScores(prev => ({ ...prev, ...newScores }));
-        setEliminated(newElim);
-        setAnswerResult(payload);
-        setPhase('ANSWER_RESULT');
-        break;
-      }
-      case 'GAME_OVER': {
-        setGameOver(payload);
-        setPhase('GAME_OVER');
-        break;
-      }
-      default:
-        break;
-    }
-  }, [eliminated]);
+    };
+    // Short delay to let WS connect first — if GAME_STARTING arrives, bootstrap is a no-op
+    const t = setTimeout(bootstrap, 1200);
+    return () => clearTimeout(t);
+  }, [roomId]);
 
   /* ---- Submit answer ---- */
-  const submitAnswer = (option) => {
-    if (selectedOption || phase !== 'QUESTION' || !question) return;
-    setSelectedOption(option);
-    stompRef.current?.publish({
-      destination: `/app/room/${roomId}/answer`,
-      body: JSON.stringify({ questionId: question.id, selectedOption: option }),
+  const submitAnswer = useCallback((option) => {
+    if (!stompRef.current) return;
+    setSelectedOption(prev => {
+      if (prev) return prev; // already answered
+      stompRef.current.publish({
+        destination: `/app/room/${roomId}/answer`,
+        body: JSON.stringify({ questionId: null, selectedOption: option }),
+      });
+      return option;
     });
-  };
+  }, [roomId]);
 
   /* ═══ RENDER PHASES ═══════════════════════════════ */
 
@@ -203,6 +262,21 @@ export default function GamePage() {
       <div className="glass anim-fade-up" style={{ padding: '3rem', textAlign: 'center', position: 'relative', zIndex: 1 }}>
         <div className="spinner" style={{ width: 48, height: 48, margin: '0 auto 1rem' }} />
         <p style={{ color: 'var(--text-secondary)' }}>Entering battle arena…</p>
+      </div>
+    </div>
+  );
+
+  /* WAITING FOR QUESTION */
+  if (phase === 'WAITING_FOR_QUESTION') return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <AnimatedBackground />
+      <div className="glass anim-fade-up" style={{ padding: '3rem', textAlign: 'center', position: 'relative', zIndex: 1, minWidth: 320 }}>
+        <div style={{ fontSize: '2.5rem', marginBottom: '1rem', animation: 'pulse 1.2s ease-in-out infinite' }}>⚡</div>
+        <h2 className="font-display text-gradient" style={{ fontSize: '1.3rem', marginBottom: '0.5rem' }}>Battle in Progress</h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          Syncing with arena… next question incoming!
+        </p>
+        <div className="spinner" style={{ width: 28, height: 28, margin: '1.25rem auto 0' }} />
       </div>
     </div>
   );
@@ -245,7 +319,6 @@ export default function GamePage() {
           {gameOver.winner === myUsername ? 'Outstanding performance, champion!' : 'Better luck next time!'}
         </p>
 
-        {/* Rankings */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
           {(gameOver.rankings || []).map((r) => (
             <div key={r.username} style={{
@@ -320,12 +393,10 @@ export default function GamePage() {
         {/* Left: Question & options */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-          {/* Timer bar */}
           {phase === 'QUESTION' && question && (
             <TimerBar timeLimit={question.timeLimitSeconds} startTime={qStartTime} />
           )}
 
-          {/* Question card */}
           {question && (
             <div style={{ ...cardStyle, marginBottom: '0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -338,7 +409,6 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Eliminated overlay */}
           {isEliminated && phase !== 'GAME_OVER' && (
             <div style={{ ...cardStyle, textAlign: 'center', background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.3)' }}>
               <Skull size={36} color="#f43f5e" style={{ marginBottom: '0.5rem' }} />
@@ -349,11 +419,11 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Answer options */}
           {question && !isEliminated && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               {optionLabels.map((opt) => {
                 const text = question.options?.[opt];
+                if (!text) return null;
                 const isSelected = selectedOption === opt;
                 const showResult = phase === 'ANSWER_RESULT';
                 const isCorrect  = showResult && answerResult?.correctAnswer === opt;
@@ -400,7 +470,6 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Submitted — waiting */}
           {selectedOption && phase === 'QUESTION' && (
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.5rem' }}>
               <div className="spinner" style={{ width: 20, height: 20, display: 'inline-block', marginRight: '0.5rem', verticalAlign: 'middle' }} />
@@ -427,7 +496,6 @@ export default function GamePage() {
             </div>
           </div>
 
-          {/* Result summary */}
           {phase === 'ANSWER_RESULT' && myResult && (
             <div style={{
               ...cardStyle, padding: '1rem', textAlign: 'center',

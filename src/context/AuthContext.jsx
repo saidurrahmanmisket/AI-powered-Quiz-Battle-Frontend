@@ -33,8 +33,8 @@ export const AuthProvider = ({ children }) => {
 
   const login = useCallback(async (username, password) => {
     const res = await authApi.login({ username, password });
-    const { token: jwt, username: uname } = res.data;
-    saveSession(jwt, { username: uname, guest: false });
+    const { token: jwt, username: uname, email, role, id } = res.data;
+    saveSession(jwt, { id, username: uname, email, role, guest: false });
   }, [saveSession]);
 
   const register = useCallback(async (username, email, password) => {
@@ -44,7 +44,7 @@ export const AuthProvider = ({ children }) => {
   const loginAsGuest = useCallback(async () => {
     const res = await authApi.guest();
     const { token: jwt, username: uname } = res.data;
-    saveSession(jwt, { username: uname, guest: true });
+    saveSession(jwt, { username: uname, guest: true, role: 'ROLE_GUEST' });
   }, [saveSession]);
 
   const logout = useCallback(() => {
@@ -59,7 +59,10 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{
-      user: user?.username || null,
+      // Expose the full user object so components can access username, email, role, etc.
+      user,
+      // Convenience: the username string (for backward compat with components that treat user as string)
+      username: user?.username || null,
       token,
       loading,
       isAuthenticated,

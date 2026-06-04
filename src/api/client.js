@@ -37,10 +37,22 @@ export const authApi = {
 
 export const gameApi = {
   getRooms: () => api.get('/game/rooms'),
-  createRoom: (name) => api.post(`/game/rooms?name=${encodeURIComponent(name)}`),
+  createRoom: (name, maxPlayers = 4, isPrivate = false, category = 'All', gameMode = 'COMPETITIVE') => 
+    api.post(`/game/rooms`, null, { params: { name, maxPlayers, isPrivate, category, gameMode } }),
   getRoom: (roomId) => api.get(`/game/rooms/${roomId}`),
   getRoomStatus: (roomId) => api.get(`/game/rooms/${roomId}/status`),
   getGameState: (roomId) => api.get(`/game/rooms/${roomId}/state`),
+  getRoomByCode: (code) => api.get(`/game/rooms/code/${code}`),
+  getFiftyFifty: (roomId) => api.get(`/game/rooms/${roomId}/fifty-fifty`),
+};
+
+export const clanApi = {
+  getLeaderboard: () => api.get('/clans/leaderboard'),
+  getMyClan: () => api.get('/clans/my'),
+  createClan: (name, tag, description) => api.post('/clans', null, { params: { name, tag, description } }),
+  joinClan: (clanId) => api.post(`/clans/${clanId}/join`),
+  leaveClan: () => api.post('/clans/leave'),
+  searchClans: () => api.get('/clans'),
 };
 
 export const leaderboardApi = {

@@ -6,7 +6,7 @@ import { gameApi } from '../api/client';
 import AnimatedBackground from '../components/AnimatedBackground';
 import {
   Users, Shield, Zap, Swords, ArrowLeft, Trophy,
-  Gamepad2, Clock, CheckCircle2, UserPlus, Bot, Crown, Flame,
+  Gamepad2, Clock, CheckCircle2, UserPlus, Bot, Crown, Flame, Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -17,6 +17,17 @@ export default function LobbyPage() {
   const [rooms, setRooms] = useState([]);
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Private lobby code and modal states
+  const [joinCode, setJoinCode] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: user?.username ? `${user.username}'s Arena` : "Player's Arena",
+    maxPlayers: 4,
+    isPrivate: false,
+    category: 'All',
+    gameMode: 'COMPETITIVE'
+  });
 
   const { connected, roomData, gameEvent, sendMessage } = useGameSocket(selectedRoomId);
 
@@ -37,7 +48,6 @@ export default function LobbyPage() {
     if (!gameEvent || !selectedRoomId) return;
     if (gameEvent.type === 'GAME_STARTING') {
       toast.success('🚀 Battle starting!', { duration: 2000 });
-      // Navigate to the full-screen game arena
       navigate(`/game/${selectedRoomId}`);
     }
   }, [gameEvent, selectedRoomId, navigate]);
@@ -61,12 +71,19 @@ export default function LobbyPage() {
     }
   };
 
-  const handleCreateRoom = async () => {
-    const name = `${user?.username || 'Player'}'s Arena`;
+  const handleCreateRoomSubmit = async (e) => {
+    e.preventDefault();
     try {
-      const res = await gameApi.createRoom(name);
+      const res = await gameApi.createRoom(
+        createForm.name,
+        createForm.maxPlayers,
+        createForm.isPrivate,
+        createForm.category,
+        createForm.gameMode
+      );
       setRooms((prev) => [...prev, res.data]);
       setSelectedRoomId(res.data.id);
+      setShowCreateModal(false);
       toast.success('Room created!');
     } catch {
       toast.error('Failed to create room');
@@ -77,6 +94,17 @@ export default function LobbyPage() {
     setSelectedRoomId(roomId);
   };
 
+  const handleJoinByCode = async () => {
+    if (!joinCode.trim()) return toast.error('Enter a lobby code');
+    try {
+      const res = await gameApi.getRoomByCode(joinCode.trim().toUpperCase());
+      setSelectedRoomId(res.data.id);
+      toast.success('Joined private lobby!');
+    } catch {
+      toast.error('Lobby code not found');
+    }
+  };
+
   /* ─── Active Lobby view ─── */
   if (selectedRoomId) {
     const currentRoom = roomData || rooms.find((r) => r.id === selectedRoomId);
@@ -85,6 +113,7 @@ export default function LobbyPage() {
         room={currentRoom}
         roomId={selectedRoomId}
         connected={connected}
+        sendMessage={sendMessage}
         onLeave={() => {
           sendMessage(`/room/${selectedRoomId}/leave`, {});
           setSelectedRoomId(null);
@@ -114,13 +143,13 @@ export default function LobbyPage() {
             <button className="btn btn-ghost anim-fade-up" onClick={() => navigate('/leaderboard')}>
               <Trophy size={16} /> Leaderboard
             </button>
-            <button className="btn btn-primary anim-fade-up" onClick={handleCreateRoom}>
+            <button className="btn btn-primary anim-fade-up" onClick={() => setShowCreateModal(true)}>
               <UserPlus size={18} /> Create Room
             </button>
           </div>
         </div>
 
-        {/* Stats strip */}
+        {/* Stats strip + Join by Code */}
         <div className="glass anim-fade-up" style={{
           display: 'flex', gap: '2rem', padding: '1rem 1.5rem',
           marginBottom: '1.5rem', alignItems: 'center', flexWrap: 'wrap',
@@ -139,8 +168,28 @@ export default function LobbyPage() {
               </strong> players online
             </span>
           </div>
-          <div style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Auto-refreshes every 5s
+          
+          {/* Join by Code bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto' }}>
+            <input 
+              type="text" 
+              placeholder="Enter Lobby Code..." 
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--r-md)',
+                padding: '0.35rem 0.75rem',
+                color: 'var(--text-primary)',
+                fontSize: '0.8rem',
+                outline: 'none',
+                width: 140,
+              }}
+            />
+            <button className="btn btn-primary" style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }} onClick={handleJoinByCode}>
+              Join Code
+            </button>
           </div>
         </div>
 
@@ -158,12 +207,87 @@ export default function LobbyPage() {
             {rooms.length === 0 && (
               <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
                 <Swords size={40} style={{ marginBottom: '1rem', opacity: 0.3 }} />
-                <p>No open rooms. Create one to start!</p>
+                <p>No open public rooms. Create one or join by code!</p>
               </div>
             )}
           </div>
         )}
       </div>
+
+      {/* Create Room Modal */}
+      {showCreateModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999,
+        }}>
+          <div className="glass anim-fade-up" style={{ padding: '2rem', width: '100%', maxWidth: 450 }}>
+            <h2 className="font-display text-gradient" style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '1.5rem' }}>
+              Create War Room
+            </h2>
+            <form onSubmit={handleCreateRoomSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Room Name</label>
+                <input 
+                  className="field__input"
+                  type="text"
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Game Mode</label>
+                  <select 
+                    className="field__input"
+                    style={{ padding: '0.5rem', background: 'rgba(0,0,0,0.2)' }}
+                    value={createForm.gameMode}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, gameMode: e.target.value }))}
+                  >
+                    <option value="COMPETITIVE" style={{ background: 'var(--bg-card)' }}>Competitive</option>
+                    <option value="CASUAL" style={{ background: 'var(--bg-card)' }}>Casual (Power-Ups)</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Category</label>
+                  <select 
+                    className="field__input"
+                    style={{ padding: '0.5rem', background: 'rgba(0,0,0,0.2)' }}
+                    value={createForm.category}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, category: e.target.value }))}
+                  >
+                    {['All', 'General Knowledge', 'Science', 'History', 'Geography', 'Technology', 'Sports', 'Movies', 'Music', 'Literature', 'Mathematics'].map(cat => (
+                      <option key={cat} value={cat} style={{ background: 'var(--bg-card)' }}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <input 
+                  type="checkbox"
+                  id="isPrivate"
+                  checked={createForm.isPrivate}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, isPrivate: e.target.checked }))}
+                  style={{ width: 16, height: 16, cursor: 'pointer' }}
+                />
+                <label htmlFor="isPrivate" style={{ fontSize: '0.85rem', fontWeight: 500, cursor: 'pointer' }}>
+                  Private room (Play with friends via code)
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setShowCreateModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                  Launch Room
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -188,6 +312,20 @@ function RoomCard({ room, onJoin }) {
       <h3 className="font-display" style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.5rem' }}>
         {room.name}
       </h3>
+
+      {/* Details chip row */}
+      <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+        {room.category && room.category !== 'All' && (
+          <span className="chip chip--violet" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>
+            📚 {room.category}
+          </span>
+        )}
+        {room.gameMode && (
+          <span className={`chip ${room.gameMode === 'CASUAL' ? 'chip--emerald' : 'chip--violet'}`} style={{ fontSize: '0.6rem', padding: '1px 5px' }}>
+            {room.gameMode === 'CASUAL' ? '🎮 Casual' : '🏆 Comp'}
+          </span>
+        )}
+      </div>
 
       {/* Player pips */}
       <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
@@ -226,7 +364,7 @@ function RoomCard({ room, onJoin }) {
 }
 
 /* ─── Active Lobby (waiting room) ─────────────────────────────────── */
-function ActiveLobby({ room, roomId, connected, onLeave }) {
+function ActiveLobby({ room, roomId, connected, sendMessage, onLeave }) {
   const { user } = useAuth();
   if (!room) {
     return (
@@ -242,6 +380,7 @@ function ActiveLobby({ room, roomId, connected, onLeave }) {
 
   const playerCount = room.players?.length ?? 0;
   const maxPlayers = room.maxPlayers ?? 4;
+  const isHost = room.players && room.players[0] === user?.username;
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh', padding: '2rem 1.5rem' }}>
@@ -258,14 +397,46 @@ function ActiveLobby({ room, roomId, connected, onLeave }) {
             <h1 className="font-display" style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '0.5rem' }}>
               {room.name}
             </h1>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <span className="chip chip--violet">
                 <Users size={12} style={{ marginRight: '0.25rem' }} /> {playerCount}/{maxPlayers} Players
               </span>
               <span className={`chip ${connected ? 'chip--emerald' : 'chip--amber'}`}>
                 {connected ? '● Connected' : '◌ Connecting…'}
               </span>
+              {room.category && (
+                <span className="chip chip--violet">
+                  📚 {room.category}
+                </span>
+              )}
+              {room.gameMode && (
+                <span className={`chip ${room.gameMode === 'CASUAL' ? 'chip--emerald' : 'chip--violet'}`}>
+                  🎮 {room.gameMode === 'CASUAL' ? 'Casual' : 'Competitive'} Mode
+                </span>
+              )}
             </div>
+            
+            {/* Lobby code for private rooms */}
+            {room.private && room.lobbyCode && (
+              <div style={{
+                background: 'rgba(99,102,241,0.1)',
+                border: '1px solid rgba(99,102,241,0.2)',
+                borderRadius: 'var(--r-md)',
+                padding: '0.5rem 1rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                marginTop: '1rem',
+                fontSize: '0.9rem',
+                color: 'var(--violet-300)',
+                fontWeight: 600,
+              }}>
+                <Lock size={14} style={{ color: 'var(--amber-400)' }} /> Private Room Code:{' '}
+                <span style={{ letterSpacing: '0.05em', color: 'var(--amber-400)', fontWeight: 800, fontSize: '1rem' }}>
+                  {room.lobbyCode}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Countdown display */}
@@ -296,6 +467,16 @@ function ActiveLobby({ room, roomId, connected, onLeave }) {
                 transition: 'width 0.9s linear',
               }} />
             </div>
+
+            {isHost && (
+              <button 
+                className="btn btn-primary" 
+                style={{ marginTop: '1.5rem', width: '100%', padding: '0.6rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                onClick={() => sendMessage(`/room/${roomId}/start`, {})}
+              >
+                <Swords size={16} /> Start Battle Now
+              </button>
+            )}
           </div>
 
           {/* Player slots */}

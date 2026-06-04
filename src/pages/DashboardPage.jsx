@@ -100,23 +100,39 @@ export default function DashboardPage() {
         {/* ── Action buttons ── */}
         <div
           className="anim-fade-up"
-          style={{ display: 'grid', gridTemplateColumns: isGuest ? '1fr 1fr 1fr' : '1fr 1fr', gap: '0.75rem', marginBottom: '2rem' }}
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '2rem' }}
         >
           <button className="btn btn-primary btn-lg btn-full" onClick={() => navigate('/lobby')}
             style={{ justifyContent: 'space-between' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Swords size={20} /> Find Match</span>
             <ArrowRight size={18} />
           </button>
-          <button className="btn btn-secondary btn-lg btn-full" onClick={() => navigate('/leaderboard')}
-            style={{ justifyContent: 'space-between' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Trophy size={18} /> Leaderboard</span>
-            <ArrowRight size={18} />
-          </button>
-          {isGuest && (
+          
+          {isGuest ? (
+            <button className="btn btn-secondary btn-lg btn-full" onClick={() => navigate('/leaderboard')}
+              style={{ justifyContent: 'space-between' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Trophy size={18} /> Leaderboard</span>
+              <ArrowRight size={18} />
+            </button>
+          ) : (
+            <button className="btn btn-secondary btn-lg btn-full" onClick={() => navigate('/clans')}
+              style={{ justifyContent: 'space-between' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Users size={18} /> Trivia Clans</span>
+              <ArrowRight size={18} />
+            </button>
+          )}
+
+          {isGuest ? (
             <button className="btn btn-ghost btn-lg btn-full" onClick={() => navigate('/register')}
               style={{ justifyContent: 'space-between' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><UserPlus size={18} /> Register</span>
               <ExternalLink size={16} />
+            </button>
+          ) : (
+            <button className="btn btn-secondary btn-lg btn-full" onClick={() => navigate('/leaderboard')}
+              style={{ justifyContent: 'space-between' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Trophy size={18} /> Leaderboard</span>
+              <ArrowRight size={18} />
             </button>
           )}
         </div>

@@ -10,6 +10,7 @@ import DashboardPage from './pages/DashboardPage';
 import LobbyPage from './pages/LobbyPage';
 import GamePage from './pages/GamePage';
 import LeaderboardPage from './pages/LeaderboardPage';
+import ClansPage from './pages/ClansPage';
 
 /* ---------- Layout wrapper ---------- */
 const AppLayout = () => {
@@ -29,6 +30,7 @@ const AppLayout = () => {
         <Route path="/lobby"           element={<ProtectedRoute><LobbyPage /></ProtectedRoute>} />
         <Route path="/game/:roomId"    element={<ProtectedRoute><GamePage /></ProtectedRoute>} />
         <Route path="/leaderboard"     element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
+        <Route path="/clans"           element={<ProtectedRoute><ClansPage /></ProtectedRoute>} />
         <Route path="/"                element={<Navigate to="/dashboard" replace />} />
         <Route path="*"                element={<Navigate to="/dashboard" replace />} />
       </Routes>

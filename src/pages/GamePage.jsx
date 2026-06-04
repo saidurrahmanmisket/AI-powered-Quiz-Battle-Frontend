@@ -5,13 +5,14 @@ import { gameApi } from '../api/client';
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
 import AnimatedBackground from '../components/AnimatedBackground';
+import toast from 'react-hot-toast';
 import {
   Trophy, Zap, Clock, CheckCircle2, XCircle,
   Shield, Bot, User, Skull, Crown
 } from 'lucide-react';
 
 /* ─── Timer Bar ─────────────────────────────────── */
-const TimerBar = ({ timeLimit, startTime }) => {
+const TimerBar = ({ timeLimit, startTime, freezeActive }) => {
   const [pct, setPct] = useState(100);
   const rafRef = useRef(null);
 
@@ -26,7 +27,8 @@ const TimerBar = ({ timeLimit, startTime }) => {
     return () => cancelAnimationFrame(rafRef.current);
   }, [startTime, timeLimit]);
 
-  const color = pct > 50 ? '#10b981' : pct > 25 ? '#f59e0b' : '#f43f5e';
+  const color = freezeActive ? '#06b6d4' : pct > 50 ? '#10b981' : pct > 25 ? '#f59e0b' : '#f43f5e';
+  const shadowColor = freezeActive ? '#06b6d4aa' : `${color}88`;
 
   return (
     <div style={{ width: '100%', height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden', marginBottom: '1rem' }}>
@@ -34,38 +36,41 @@ const TimerBar = ({ timeLimit, startTime }) => {
         height: '100%', width: `${pct}%`,
         background: `linear-gradient(90deg, ${color}, ${color}aa)`,
         borderRadius: 99,
-        transition: 'background 0.3s',
-        boxShadow: `0 0 12px ${color}88`,
+        transition: 'all 0.3s',
+        boxShadow: `0 0 12px ${shadowColor}`,
       }} />
     </div>
   );
 };
 
 /* ─── Player Chip ────────────────────────────────── */
-const PlayerChip = ({ username, score, eliminated, isBot, isMe }) => (
-  <div style={{
-    display: 'flex', alignItems: 'center', gap: '0.6rem',
-    padding: '0.5rem 0.8rem',
-    borderRadius: 'var(--r-lg)',
-    background: eliminated
-      ? 'rgba(244,63,94,0.08)'
-      : isMe
-        ? 'rgba(99,102,241,0.15)'
-        : 'rgba(255,255,255,0.04)',
-    border: `1px solid ${eliminated ? 'rgba(244,63,94,0.3)' : isMe ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.06)'}`,
-    opacity: eliminated ? 0.5 : 1,
-    transition: 'all 0.3s',
-  }}>
-    {isBot ? <Bot size={14} color="var(--violet-400)" /> : <User size={14} color="var(--text-secondary)" />}
-    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: eliminated ? 'var(--text-muted)' : isMe ? 'var(--violet-300)' : 'var(--text-primary)' }}>
-      {username}
-    </span>
-    {eliminated && <Skull size={12} color="#f43f5e" />}
-    <span style={{ marginLeft: 'auto', fontSize: '0.75rem', fontWeight: 700, color: 'var(--amber-400)' }}>
-      {score ?? 0}
-    </span>
-  </div>
-);
+const PlayerChip = ({ username, score, eliminated, isBot, isMe }) => {
+  const displayName = isBot ? username.replace(/^🤖\s*/, '') : username;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '0.6rem',
+      padding: '0.5rem 0.8rem',
+      borderRadius: 'var(--r-lg)',
+      background: eliminated
+        ? 'rgba(244,63,94,0.08)'
+        : isMe
+          ? 'rgba(99,102,241,0.15)'
+          : 'rgba(255,255,255,0.04)',
+      border: `1px solid ${eliminated ? 'rgba(244,63,94,0.3)' : isMe ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.06)'}`,
+      opacity: eliminated ? 0.5 : 1,
+      transition: 'all 0.3s',
+    }}>
+      {isBot ? <Bot size={14} color="var(--violet-400)" /> : <User size={14} color="var(--text-secondary)" />}
+      <span style={{ fontSize: '0.8rem', fontWeight: 600, color: eliminated ? 'var(--text-muted)' : isMe ? 'var(--violet-300)' : 'var(--text-primary)' }}>
+        {displayName}
+      </span>
+      {eliminated && <Skull size={12} color="#f43f5e" />}
+      <span style={{ marginLeft: 'auto', fontSize: '0.75rem', fontWeight: 700, color: 'var(--amber-400)' }}>
+        {score ?? 0}
+      </span>
+    </div>
+  );
+};
 
 /* ═══════════════════════════════════════════════════
    MAIN GAME PAGE
@@ -95,6 +100,37 @@ export default function GamePage() {
   const [answerResult, setAnswerResult] = useState(null);
   const [gameOver, setGameOver] = useState(null);
 
+  // Casual Mode & Social/Emotes states
+  const [gameMode, setGameMode] = useState('COMPETITIVE');
+  const [emoteMap, setEmoteMap] = useState({});
+  const [lifelinesUsed, setLifelinesUsed] = useState({
+    fiftyFifty: false,
+    freezeTime: false,
+    doublePoints: false
+  });
+  const [hiddenOptions, setHiddenOptions] = useState(new Set());
+  const [doublePointsActive, setDoublePointsActive] = useState(false);
+  const [cyanTimer, setCyanTimer] = useState(false);
+
+  // Expire emotes after 2.5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setEmoteMap(prev => {
+        const next = { ...prev };
+        let changed = false;
+        Object.keys(next).forEach(username => {
+          if (next[username] && now - next[username].time > 2500) {
+            delete next[username];
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
   /* ---- WebSocket connect ---- */
   useEffect(() => {
     // handleEvent defined INSIDE useEffect to avoid stale closure issues
@@ -106,6 +142,9 @@ export default function GamePage() {
         case 'GAME_STARTING': {
           const players = payload.players || [];
           setAllPlayers(players);
+          if (payload.gameMode) {
+            setGameMode(payload.gameMode);
+          }
           // Init scores for all players
           const initScores = {};
           players.forEach(p => { initScores[p] = 0; });
@@ -135,6 +174,9 @@ export default function GamePage() {
           setSelectedOption(null);
           setAnswerResult(null);
           setPhase('QUESTION');
+          setHiddenOptions(new Set()); // Reset 50:50 for this round
+          setDoublePointsActive(false); // Reset double points for this round
+          setCyanTimer(false); // Reset freeze timer state
           break;
         }
         case 'ANSWER_RESULT': {
@@ -162,6 +204,21 @@ export default function GamePage() {
         case 'GAME_OVER': {
           setGameOver(payload);
           setPhase('GAME_OVER');
+          break;
+        }
+        case 'EMOTE': {
+          const { username, emote } = payload;
+          setEmoteMap(prev => ({
+            ...prev,
+            [username]: { emote, time: Date.now() }
+          }));
+          break;
+        }
+        case 'FREEZE_TIME_ACTIVATED': {
+          const { username } = payload;
+          setQStartTime(prev => prev + 5000);
+          setCyanTimer(true);
+          toast(`❄️ Time frozen by ${username}! +5s`, { icon: '❄️' });
           break;
         }
         default:
@@ -204,6 +261,10 @@ export default function GamePage() {
         const res = await gameApi.getGameState(roomId);
         const snap = res.data;
 
+        if (snap.gameMode) {
+          setGameMode(snap.gameMode);
+        }
+
         // Populate player list if we don't have it yet
         if (snap.players && snap.players.length > 0) {
           setAllPlayers(prev => prev.length > 0 ? prev : snap.players);
@@ -218,9 +279,15 @@ export default function GamePage() {
           }
         }
 
-        // If game already active and we're still CONNECTING → move to waiting
+        // If game already active and we're still CONNECTING → move to waiting or active question
         if ((snap.status === 'PLAYING' || snap.status === 'STARTING') && snap.gameActive) {
-          setPhase(prev => prev === 'CONNECTING' ? 'WAITING_FOR_QUESTION' : prev);
+          if (snap.questionActive && snap.currentQuestion) {
+            setQuestion(snap.currentQuestion);
+            setQStartTime(Date.now() - (snap.questionElapsedMs || 0));
+            setPhase('QUESTION');
+          } else {
+            setPhase(prev => prev === 'CONNECTING' ? 'WAITING_FOR_QUESTION' : prev);
+          }
         }
       } catch (e) {
         console.warn('Could not fetch game snapshot', e);
@@ -238,11 +305,55 @@ export default function GamePage() {
       if (prev) return prev; // already answered
       stompRef.current.publish({
         destination: `/app/room/${roomId}/answer`,
-        body: JSON.stringify({ questionId: null, selectedOption: option }),
+        body: JSON.stringify({ questionId: null, selectedOption: option, doublePoints: doublePointsActive }),
       });
       return option;
     });
-  }, [roomId]);
+  }, [roomId, doublePointsActive]);
+
+  /* ---- Lifelines and Emotes triggers ---- */
+  const handleFiftyFifty = async () => {
+    if (lifelinesUsed.fiftyFifty || phase !== 'QUESTION') return;
+    try {
+      const res = await gameApi.getFiftyFifty(roomId);
+      setHiddenOptions(new Set(res.data));
+      setLifelinesUsed(prev => ({ ...prev, fiftyFifty: true }));
+      toast.success('Hiding two wrong options! 🃏');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to use 50:50');
+    }
+  };
+
+  const handleFreezeTime = () => {
+    if (lifelinesUsed.freezeTime || phase !== 'QUESTION') return;
+    if (stompRef.current) {
+      stompRef.current.publish({
+        destination: `/app/room/${roomId}/powerup`,
+        body: JSON.stringify({ type: 'FREEZE' }),
+      });
+      setLifelinesUsed(prev => ({ ...prev, freezeTime: true }));
+    }
+  };
+
+  const handleDoublePoints = () => {
+    if (lifelinesUsed.doublePoints || phase !== 'QUESTION') return;
+    setDoublePointsActive(true);
+    setLifelinesUsed(prev => ({ ...prev, doublePoints: true }));
+    toast.success('Double Points active for this question! 💎');
+  };
+
+  const sendEmote = (emote) => {
+    if (stompRef.current) {
+      try {
+        stompRef.current.publish({
+          destination: `/app/room/${roomId}/emote`,
+          body: JSON.stringify({ emote }),
+        });
+      } catch (err) {
+        console.error('Failed to send emote', err);
+      }
+    }
+  };
 
   /* ═══ RENDER PHASES ═══════════════════════════════ */
 
@@ -394,7 +505,7 @@ export default function GamePage() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
           {phase === 'QUESTION' && question && (
-            <TimerBar timeLimit={question.timeLimitSeconds} startTime={qStartTime} />
+            <TimerBar timeLimit={question.timeLimitSeconds} startTime={qStartTime} freezeActive={cyanTimer} />
           )}
 
           {question && (
@@ -424,6 +535,16 @@ export default function GamePage() {
               {optionLabels.map((opt) => {
                 const text = question.options?.[opt];
                 if (!text) return null;
+                const isHidden = hiddenOptions.has(opt);
+                if (isHidden) {
+                  return (
+                    <div key={opt} style={{
+                      padding: '1rem', borderRadius: 'var(--r-lg)',
+                      background: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.04)',
+                      opacity: 0.2, minHeight: 62
+                    }} />
+                  );
+                }
                 const isSelected = selectedOption === opt;
                 const showResult = phase === 'ANSWER_RESULT';
                 const isCorrect  = showResult && answerResult?.correctAnswer === opt;
@@ -470,6 +591,57 @@ export default function GamePage() {
             </div>
           )}
 
+          {/* Emotes and Casual Mode Lifelines panels */}
+          {question && !isEliminated && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+              {/* Emotes Selector */}
+              <div className="glass" style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: 'var(--r-xl)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', marginRight: '0.25rem' }}>Emote:</span>
+                {['🤯', '😎', '👍', '👏', 'GG', 'NOOO'].map(emo => (
+                  <button key={emo} className="btn btn-ghost" 
+                    style={{ padding: '0.25rem 0.5rem', minWidth: 'auto', fontSize: '1rem' }} 
+                    onClick={() => sendEmote(emo)}>
+                    {emo}
+                  </button>
+                ))}
+              </div>
+
+              {/* Casual Mode Lifelines */}
+              {gameMode === 'CASUAL' && phase === 'QUESTION' && (
+                <div className="glass" style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: 'var(--r-xl)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginRight: '0.25rem' }}>Lifelines:</span>
+                  
+                  <button 
+                    className={`btn ${lifelinesUsed.fiftyFifty ? 'btn-ghost' : 'btn-primary'}`} 
+                    style={{ padding: '0.25rem 0.6rem', minWidth: 'auto', fontSize: '0.75rem', opacity: lifelinesUsed.fiftyFifty ? 0.4 : 1 }} 
+                    disabled={lifelinesUsed.fiftyFifty}
+                    onClick={handleFiftyFifty}
+                  >
+                    50:50
+                  </button>
+
+                  <button 
+                    className={`btn ${lifelinesUsed.freezeTime ? 'btn-ghost' : 'btn-primary'}`} 
+                    style={{ padding: '0.25rem 0.6rem', minWidth: 'auto', fontSize: '0.75rem', opacity: lifelinesUsed.freezeTime ? 0.4 : 1 }} 
+                    disabled={lifelinesUsed.freezeTime}
+                    onClick={handleFreezeTime}
+                  >
+                    ❄️ Freeze
+                  </button>
+
+                  <button 
+                    className={`btn ${doublePointsActive ? 'btn-emerald' : lifelinesUsed.doublePoints ? 'btn-ghost' : 'btn-primary'}`} 
+                    style={{ padding: '0.25rem 0.6rem', minWidth: 'auto', fontSize: '0.75rem', opacity: lifelinesUsed.doublePoints && !doublePointsActive ? 0.4 : 1 }} 
+                    disabled={lifelinesUsed.doublePoints}
+                    onClick={handleDoublePoints}
+                  >
+                    💎 2x
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {selectedOption && phase === 'QUESTION' && (
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.5rem' }}>
               <div className="spinner" style={{ width: 20, height: 20, display: 'inline-block', marginRight: '0.5rem', verticalAlign: 'middle' }} />
@@ -486,12 +658,26 @@ export default function GamePage() {
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               {allPlayers.map(p => (
-                <PlayerChip key={p} username={p}
-                  score={scores[p] ?? 0}
-                  eliminated={eliminated.has(p)}
-                  isBot={p.startsWith('🤖') || p.startsWith('Bot_')}
-                  isMe={p === myUsername}
-                />
+                <div key={p} style={{ position: 'relative' }}>
+                  <PlayerChip username={p}
+                    score={scores[p] ?? 0}
+                    eliminated={eliminated.has(p)}
+                    isBot={p.startsWith('🤖') || p.startsWith('Bot_')}
+                    isMe={p === myUsername}
+                  />
+                  {emoteMap[p] && (
+                    <div style={{
+                      position: 'absolute', right: '100%', top: '50%', transform: 'translateY(-50%)',
+                      marginRight: '0.5rem', background: 'var(--violet-600)', border: '1px solid var(--violet-400)',
+                      borderRadius: 'var(--r-md) var(--r-md) 0 var(--r-md)', padding: '0.25rem 0.5rem',
+                      fontSize: '0.8rem', whiteSpace: 'nowrap', zIndex: 10,
+                      boxShadow: '0 0 12px rgba(124,237,124,0.4)',
+                      animation: 'fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both',
+                    }}>
+                      {emoteMap[p].emote}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>

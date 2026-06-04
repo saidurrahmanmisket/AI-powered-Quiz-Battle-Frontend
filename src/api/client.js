@@ -44,6 +44,7 @@ export const gameApi = {
   getGameState: (roomId) => api.get(`/game/rooms/${roomId}/state`),
   getRoomByCode: (code) => api.get(`/game/rooms/code/${code}`),
   getFiftyFifty: (roomId) => api.get(`/game/rooms/${roomId}/fifty-fifty`),
+  getOnlineCount: () => api.get('/game/online-count'),
 };
 
 export const clanApi = {

@@ -17,6 +17,7 @@ export default function LobbyPage() {
   const [rooms, setRooms] = useState([]);
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [onlineCount, setOnlineCount] = useState(1);
 
   // Private lobby code and modal states
   const [joinCode, setJoinCode] = useState('');
@@ -33,13 +34,13 @@ export default function LobbyPage() {
 
   // Initial fetch
   useEffect(() => {
-    fetchRooms();
+    fetchRooms(false);
   }, []);
 
   // Poll room list every 5 s when not in a room
   useEffect(() => {
     if (selectedRoomId) return;
-    const id = setInterval(fetchRooms, 5000);
+    const id = setInterval(() => fetchRooms(true), 5000);
     return () => clearInterval(id);
   }, [selectedRoomId]);
 
@@ -59,15 +60,19 @@ export default function LobbyPage() {
     }
   }, [roomData, selectedRoomId, navigate]);
 
-  const fetchRooms = async () => {
+  const fetchRooms = async (isPoll = false) => {
     try {
-      setLoading(true);
-      const res = await gameApi.getRooms();
-      setRooms(res.data);
+      if (!isPoll) setLoading(true);
+      const [roomsRes, countRes] = await Promise.all([
+        gameApi.getRooms(),
+        gameApi.getOnlineCount()
+      ]);
+      setRooms(roomsRes.data);
+      setOnlineCount(countRes.data.count);
     } catch {
       toast.error('Failed to load rooms');
     } finally {
-      setLoading(false);
+      if (!isPoll) setLoading(false);
     }
   };
 
@@ -163,9 +168,7 @@ export default function LobbyPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem' }}>
             <Flame size={14} color="var(--violet-400)" />
             <span style={{ color: 'var(--text-secondary)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>
-                {rooms.reduce((acc, r) => acc + (r.players?.length || 0), 0)}
-              </strong> players online
+              <strong style={{ color: 'var(--text-primary)' }}>{onlineCount}</strong> players online
             </span>
           </div>
           

@@ -27,16 +27,18 @@ const TimerBar = ({ timeLimit, startTime, freezeActive }) => {
     return () => cancelAnimationFrame(rafRef.current);
   }, [startTime, timeLimit]);
 
-  const color = freezeActive ? '#06b6d4' : pct > 50 ? '#10b981' : pct > 25 ? '#f59e0b' : '#f43f5e';
-  const shadowColor = freezeActive ? '#06b6d4aa' : `${color}88`;
+  // Similar to the lobby's start progress bar gradient (violet-500 to amber-400), or cyan/blue when frozen
+  const gradient = freezeActive
+    ? 'linear-gradient(90deg, #00d2ff, #0066ff)'
+    : 'linear-gradient(90deg, var(--violet-500), var(--amber-400))';
+  const shadowColor = freezeActive ? 'rgba(0, 210, 255, 0.4)' : 'rgba(139, 92, 246, 0.35)';
 
   return (
-    <div style={{ width: '100%', height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden', marginBottom: '1rem' }}>
+    <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', marginBottom: '1.25rem' }}>
       <div style={{
         height: '100%', width: `${pct}%`,
-        background: `linear-gradient(90deg, ${color}, ${color}aa)`,
+        background: gradient,
         borderRadius: 99,
-        transition: 'all 0.3s',
         boxShadow: `0 0 12px ${shadowColor}`,
       }} />
     </div>

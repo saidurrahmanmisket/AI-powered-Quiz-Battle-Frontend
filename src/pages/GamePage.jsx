@@ -297,7 +297,7 @@ export default function GamePage() {
         <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {allPlayers.map(p => (
             <PlayerChip key={p} username={p} score={0} isMe={p === myUsername}
-              isBot={p.startsWith('Bot_')} />
+              isBot={p.startsWith('🤖') || p.startsWith('Bot_')} />
           ))}
         </div>
       </div>
@@ -382,7 +382,7 @@ export default function GamePage() {
               border: `1px solid ${eliminated.has(p) ? '#f43f5e55' : p === myUsername ? 'var(--violet-400)' : 'rgba(255,255,255,0.1)'}`,
               fontSize: '0.65rem', fontWeight: 700, color: eliminated.has(p) ? '#f43f5e88' : 'var(--text-secondary)',
             }}>
-              {p.startsWith('Bot_') ? '🤖' : p.slice(0, 2).toUpperCase()}
+              {p.startsWith('🤖') || p.startsWith('Bot_') ? '🤖' : p.slice(0, 2).toUpperCase()}
             </div>
           ))}
         </div>
@@ -489,7 +489,7 @@ export default function GamePage() {
                 <PlayerChip key={p} username={p}
                   score={scores[p] ?? 0}
                   eliminated={eliminated.has(p)}
-                  isBot={p.startsWith('Bot_')}
+                  isBot={p.startsWith('🤖') || p.startsWith('Bot_')}
                   isMe={p === myUsername}
                 />
               ))}
